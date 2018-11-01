@@ -1,0 +1,4 @@
+.idea
+*egg-info*
+.git_version
+__pycache__
