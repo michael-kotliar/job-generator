@@ -50,6 +50,8 @@ def generate_jobs (args, metadata, filelist):
     for key, value in metadata.items():
         print("\nProcess: ", key)
         selected_files = sorted([path for filename, path in filelist.items() if re.match(".*" + key + ".*", filename)])
+        if len(selected_files) < 2:
+            continue
         print("Selected FASTQ files:\n", dumps(selected_files, indent=4))
         job["fastq_file_upstream"].append({
             "class": "File",
