@@ -24,7 +24,7 @@ def arg_parser():
 
 
 def get_metadata(metadata_file):
-    return pd.read_table(metadata_file, index_col=0).to_dict(orient="index")
+    return pd.read_table(metadata_file, index_col=0, comment='#').to_dict(orient="index")
 
 
 def generate_jobs (args, metadata, filelist):
