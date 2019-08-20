@@ -27,7 +27,7 @@ def download_file(file_url):
     params = ["wget", "-q", "--show-progress", file_url]
     env = os.environ.copy()
     subprocess.run(params, env=env)
-    return os.path.join(os.getcwd, os.path.basename(file_url))
+    return os.path.join(os.getcwd(), os.path.basename(file_url))
 
 
 def trigger_dag(job, run_id, dag_id):
