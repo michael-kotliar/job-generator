@@ -66,7 +66,8 @@ setup(
     zip_safe=False,
     entry_points={
         'console_scripts': [
-            "get-salmon-deseq-job=job_generator.get_salmon_deseq_job:main"
+            "get-salmon-deseq-job=job_generator.get_salmon_deseq_job:main",
+            "submit-max-atac-job=job_generator.submit_max_atac_job:main"
         ]
     },
     include_package_data=True,
