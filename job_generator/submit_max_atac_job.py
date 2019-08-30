@@ -15,6 +15,7 @@ def arg_parser():
     general_parser.add_argument("-b", "--blacklisted", help="Path to blacklisted regions file",              required=True)
     general_parser.add_argument("-c", "--chromlength", help="Path to chromosome length file",                required=True)
     general_parser.add_argument("-g", "--genome",      help="Path to genome FASTA file",                     required=True)
+    general_parser.add_argument("-n", "--number",      help="Limit number of experiments to submit",         type=int)
     general_parser.add_argument("-o", "--output",      help="Path to be used as output_folder in job files", required=True)
     return general_parser
 
@@ -24,10 +25,13 @@ def get_metadata(metadata_file):
 
 
 def download_file(file_url):
+    filename = os.path.join(os.getcwd(), os.path.basename(file_url))
+    if os.path.isfile(filename):
+        raise Exception("File already exists")
     params = ["wget", "-q", "--show-progress", file_url]
     env = os.environ.copy()
     subprocess.run(params, env=env)
-    return os.path.join(os.getcwd(), os.path.basename(file_url))
+    return filename
 
 
 def trigger_dag(job, run_id, dag_id):
@@ -45,8 +49,10 @@ def submit_jobs (args, metadata):
         if (f,s) in expreriments or (s,f) in expreriments:
             continue
         expreriments.append((f,s))
-
+    count = 0
     for f, s in expreriments:
+        if count >= args.number:
+            continue
         print("\nProcess", f,s)
         f_url = metadata[f]["File download URL"]
         s_url = metadata[s]["File download URL"]
@@ -88,6 +94,7 @@ def submit_jobs (args, metadata):
             }
             print(dumps(job_template, indent = 4))
             trigger_dag(job_template, run_id, args.dag)
+            count = count + 1
         except Exception as err:
             print("Failed to submit job", err)
 
@@ -96,7 +103,7 @@ def main(argsl=None):
     if argsl is None:
         argsl = sys.argv[1:]
     args,_ = arg_parser().parse_known_args(argsl)
-    args = normalize_args(args, ["dag"])
+    args = normalize_args(args, ["dag", "number"])
 
     metadata = get_metadata(args.metadata)
 
