@@ -60,7 +60,7 @@ def submit_jobs (args, metadata):
         try:
             f_location = download_file(f_url)
             s_location = download_file(s_url)
-            run_id = f + "_" + k
+            run_id = f + "_" + s
             job_template = {
                 "job": {
                     "fastq_file_1": {
