@@ -7,6 +7,13 @@ from json import dumps
 from job_generator.utils.utils import normalize_args
 
 
+INDEX_COLUMNS = ["Experiment accession", "Biological replicate(s)", "Paired end", "Technical replicate"]
+EXP_COLUMNS = ["Experiment accession", "Biological replicate(s)"]
+FILTER_COLUMN = "Run type"
+FILTER_VALUE = "paired-ended"
+CWD = os.getcwd()
+
+
 def arg_parser():
     general_parser = argparse.ArgumentParser()
     general_parser.add_argument("-m", "--metadata",    help="Path to metadata file",                         required=True)
@@ -21,17 +28,29 @@ def arg_parser():
 
 
 def get_metadata(metadata_file):
-    return pd.read_table(metadata_file, index_col=0, comment='#').to_dict(orient="index")
+    raw_data = pd.read_table(metadata_file, index_col=INDEX_COLUMNS, comment='#')
+    return raw_data.loc[raw_data[FILTER_COLUMN] == FILTER_VALUE].sort_index()
 
 
-def download_file(file_url):
-    filename = os.path.join(os.getcwd(), os.path.basename(file_url))
-    if os.path.isfile(filename):
-        raise Exception("File already exists")
-    params = ["wget", "-q", "--show-progress", file_url]
-    env = os.environ.copy()
-    subprocess.run(params, env=env)
-    return filename
+def download_files(files_df, prefix):
+    combined_filepath = os.path.join(CWD, prefix + ".fastq.gz")
+    if os.path.isfile(combined_filepath):
+        raise Exception(f"""File {combined_filepath} already exists""")
+    for file_url in files_df["File download URL"]:
+        current_filename = file_url.split("/")[-1]
+        current_filepath = os.path.join(CWD, current_filename)
+        if os.path.isfile(current_filepath):
+            params = " ".join(["cat", current_filepath, ">>", combined_filepath])
+        else:
+            params = " ".join(["wget", "-O", "-", "-q", "--show-progress", file_url, ">>", combined_filepath])
+        env = os.environ.copy()
+        print("\n  Run", params)
+        try:
+            subprocess.run(params, env=env, shell=True, check=True)
+        except Exception as err:
+            os.remove(combined_filepath)
+            raise err
+    return combined_filepath
 
 
 def trigger_dag(job, run_id, dag_id):
@@ -41,35 +60,44 @@ def trigger_dag(job, run_id, dag_id):
     subprocess.run(params, env=env)
 
 
+def properly_paired(first_files, second_files):
+    def equal(f,s):
+        return (f["Paired with"].equals(s["File accession"])) and (s["Paired with"].equals(f["File accession"])) and (f.index.equals(s.index))
+    if equal(first_files, second_files):
+        return True
+    else:
+        print("  Fix pairing order")
+        row_count = len(second_files.index)
+        second_files = second_files.iloc[pd.Index(second_files["File accession"]).get_indexer(first_files["Paired with"])]
+        return (equal(first_files, second_files) and len(second_files.index) == row_count)
+
+
 def submit_jobs (args, metadata):
-    expreriments = []
-    for k, v in metadata.items():
-        f = k
-        s = v["Paired with"]
-        if (f,s) in expreriments or (s,f) in expreriments:
-            continue
-        expreriments.append((f,s))
     count = 0
-    for f, s in expreriments:
-        if count >= args.number:
-            continue
-        print("\nProcess", f,s)
-        f_url = metadata[f]["File download URL"]
-        s_url = metadata[s]["File download URL"]
-        print("Downloading FASTQ files:\n", f_url, "\n", s_url)
+    for exp_idx, exp_data in metadata.groupby(level=EXP_COLUMNS):
+        if args.number and count >= args.number:
+            break
+        print("\n\n\nProcess experiment:\n\n  Experiment accession -", exp_idx[0],"\n  Biological replicate -", exp_idx[1])
+        first_files = exp_data.loc[exp_idx+(1,)]
+        second_files = exp_data.loc[exp_idx+(2,)]
+        count = count + 1
         try:
-            f_location = download_file(f_url)
-            s_location = download_file(s_url)
-            run_id = f + "_" + s
+            if not properly_paired(first_files, second_files):
+                raise Exception("Failed to fix pairing order")
+            print("\n  First:\n", first_files[["File accession", "Paired with"]])
+            print("\n  Second:\n", second_files[["File accession", "Paired with"]])
+            run_id = "_".join([str(i) for i in exp_idx])
+            first_combined = download_files(first_files, run_id+"_R1")
+            second_combined = download_files(second_files, run_id+"_R2")
             job_template = {
                 "job": {
                     "fastq_file_1": {
                         "class": "File",
-                        "location": f_location
+                        "location": first_combined
                     },
                     "fastq_file_2": {
                         "class": "File",
-                        "location": s_location
+                        "location": second_combined
                     },
                     "indices_folder": {
                         "class": "Directory",
@@ -94,9 +122,8 @@ def submit_jobs (args, metadata):
             }
             print(dumps(job_template, indent = 4))
             trigger_dag(job_template, run_id, args.dag)
-            count = count + 1
         except Exception as err:
-            print("Failed to submit job", err)
+            print("\n  Failed to submit job:", err)
 
 
 def main(argsl=None):
@@ -106,7 +133,6 @@ def main(argsl=None):
     args = normalize_args(args, ["dag", "number"])
 
     metadata = get_metadata(args.metadata)
-
     submit_jobs(args, metadata)
 
 
