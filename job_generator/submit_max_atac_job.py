@@ -92,12 +92,14 @@ def extract_sra(srr_files, run_id, fdump=None):
 
     for srr_id in srr_files:
         if fdump:
-            params = f"""{fdump} --split-3 --gzip {srr_id} &&
+            params = f"""wget -q --show-progress https://ftp.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/{srr_id[0:6]}/{srr_id}/{srr_id}.sra
+                        {fdump} --split-3 --gzip {srr_id}.sra &&
                         cat {srr_id}_1.fastq.gz >> {first_filename} &&
                         cat {srr_id}_2.fastq.gz >> {second_filename} &&
                         rm {srr_id}_1.fastq.gz {srr_id}_2.fastq.gz"""
         else:
-            params = f"""docker run --rm -ti -v {CWD}:/tmp/ biowardrobe2/sratoolkit:v2.8.2-1 fastq-dump --split-3 --gzip {srr_id} &&
+            params = f"""wget -q --show-progress https://ftp.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/{srr_id[0:6]}/{srr_id}/{srr_id}.sra
+                        docker run --rm -ti -v {CWD}:/tmp/ biowardrobe2/sratoolkit:v2.8.2-1 fastq-dump --split-3 --gzip {srr_id}.sra &&
                         cat {srr_id}_1.fastq.gz >> {first_filename} &&
                         cat {srr_id}_2.fastq.gz >> {second_filename} &&
                         rm {srr_id}_1.fastq.gz {srr_id}_2.fastq.gz"""
