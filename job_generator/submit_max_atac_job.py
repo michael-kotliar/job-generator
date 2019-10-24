@@ -26,6 +26,7 @@ def arg_parser():
     general_parser.add_argument("-g", "--genome",      help="Path to genome FASTA file",                     required=True)
     general_parser.add_argument("-n", "--number",      help="Limit number of experiments to submit",         type=int)
     general_parser.add_argument("-o", "--output",      help="Path to be used as output_folder in job files", required=True)
+    general_parser.add_argument("-f", "--fdump",       help="Path to fastq-dump (use it with --sra). Run from Docker if not set")
     general_parser.add_argument("-s", "--sra",         help="Use metadata file with SRA identifiers",        action="store_true")
     return general_parser
 
@@ -80,7 +81,7 @@ def get_metadata_sra(metadata_file):
     return raw_data.sort_index()
 
 
-def extract_sra(srr_files, run_id):
+def extract_sra(srr_files, run_id, fdump=None):
     first_filename = run_id + "_R1.fastq.gz"
     second_filename = run_id + "_R2.fastq.gz"
     first_combined_filepath = os.path.join(CWD, first_filename)
@@ -90,10 +91,17 @@ def extract_sra(srr_files, run_id):
         raise Exception(f"""File {first_combined_filepath} or {second_combined_filepath} already exists""")
 
     for srr_id in srr_files:
-        params = f"""docker run --rm -ti -v {CWD}:/tmp/ biowardrobe2/sratoolkit:v2.8.2-1 fastq-dump --split-3 --gzip {srr_id} &&
-                     cat {srr_id}_1.fastq.gz >> {first_filename} &&
-                     cat {srr_id}_2.fastq.gz >> {second_filename} &&
-                     rm {srr_id}_1.fastq.gz {srr_id}_2.fastq.gz"""
+        if fdump:
+            params = f"""{fdump} --split-3 --gzip {srr_id} &&
+                        cat {srr_id}_1.fastq.gz >> {first_filename} &&
+                        cat {srr_id}_2.fastq.gz >> {second_filename} &&
+                        rm {srr_id}_1.fastq.gz {srr_id}_2.fastq.gz"""
+        else:
+            params = f"""docker run --rm -ti -v {CWD}:/tmp/ biowardrobe2/sratoolkit:v2.8.2-1 fastq-dump --split-3 --gzip {srr_id} &&
+                        cat {srr_id}_1.fastq.gz >> {first_filename} &&
+                        cat {srr_id}_2.fastq.gz >> {second_filename} &&
+                        rm {srr_id}_1.fastq.gz {srr_id}_2.fastq.gz"""
+
         env = os.environ.copy()
         print("\n  Run", params)
         try:
@@ -121,7 +129,7 @@ def submit_jobs_sra (args, metadata):
         try:
             print("\n  SRR: ", srr_files)
             run_id = exp_idx
-            first_combined, second_combined = extract_sra(srr_files, run_id)
+            first_combined, second_combined = extract_sra(srr_files, run_id, args.fdump)
             job_template = {
                 "job": {
                     "fastq_file_1": {
