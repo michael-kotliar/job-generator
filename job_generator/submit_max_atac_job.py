@@ -28,6 +28,7 @@ def arg_parser():
     general_parser.add_argument("-o", "--output",      help="Path to be used as output_folder in job files", required=True)
     general_parser.add_argument("-f", "--fdump",       help="Path to fastq-dump (use it with --sra). Run from Docker if not set")
     general_parser.add_argument("-s", "--sra",         help="Use metadata file with SRA identifiers",        action="store_true")
+    general_parser.add_argument("-l", "--local",       help="Work with pre-downloaded fastq files. Only for --sra", action="store_true")
     return general_parser
 
 
@@ -81,7 +82,7 @@ def get_metadata_sra(metadata_file):
     return raw_data.sort_index()
 
 
-def extract_sra(srr_files, run_id, fdump=None):
+def extract_sra(srr_files, run_id, fdump, local):
     first_filename = run_id + "_R1.fastq.gz"
     second_filename = run_id + "_R2.fastq.gz"
     first_combined_filepath = os.path.join(CWD, first_filename)
@@ -92,17 +93,21 @@ def extract_sra(srr_files, run_id, fdump=None):
 
     for srr_id in srr_files:
         if fdump:
-            params = f"""{fdump} --split-3 --gzip {srr_id} &&
-                        cat {srr_id}_1.fastq.gz >> {first_filename} &&
+            download = f"""{fdump} --split-3 --gzip {srr_id} &&"""
+            combine = f"""cat {srr_id}_1.fastq.gz >> {first_filename} &&
                         cat {srr_id}_2.fastq.gz >> {second_filename} &&
                         rm {srr_id}_1.fastq.gz {srr_id}_2.fastq.gz"""
         else:
-            params = f"""docker run --rm -ti -v {CWD}:/tmp/ biowardrobe2/sratoolkit:v2.8.2-1 fastq-dump --split-3 --gzip {srr_id} &&
-                        cat {srr_id}_1.fastq.gz >> {first_filename} &&
+            download = f"""docker run --rm -ti -v {CWD}:/tmp/ biowardrobe2/sratoolkit:v2.8.2-1 fastq-dump --split-3 --gzip {srr_id} &&"""
+            combine = f"""cat {srr_id}_1.fastq.gz >> {first_filename} &&
                         cat {srr_id}_2.fastq.gz >> {second_filename} &&
                         rm {srr_id}_1.fastq.gz {srr_id}_2.fastq.gz"""
 
         env = os.environ.copy()
+        if not local:
+            params = download + "\n" + combine
+        else:
+            params = combine
         print("\n  Run", params)
         try:
             subprocess.run(params, env=env, shell=True, check=True)
@@ -129,7 +134,7 @@ def submit_jobs_sra (args, metadata):
         try:
             print("\n  SRR: ", srr_files)
             run_id = exp_idx
-            first_combined, second_combined = extract_sra(srr_files, run_id, args.fdump)
+            first_combined, second_combined = extract_sra(srr_files, run_id, args.fdump, args.local)
             job_template = {
                 "job": {
                     "fastq_file_1": {
@@ -225,7 +230,7 @@ def main(argsl=None):
     if argsl is None:
         argsl = sys.argv[1:]
     args,_ = arg_parser().parse_known_args(argsl)
-    args = normalize_args(args, ["dag", "number", "sra"])
+    args = normalize_args(args, ["dag", "number", "sra", "local"])
     if args.sra:
         metadata = get_metadata_sra(args.metadata)
         submit_jobs_sra(args, metadata)
