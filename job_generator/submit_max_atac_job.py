@@ -29,6 +29,7 @@ def arg_parser():
     general_parser.add_argument("-f", "--fdump",       help="Path to fastq-dump (use it with --sra). Run from Docker if not set")
     general_parser.add_argument("-s", "--sra",         help="Use metadata file with SRA identifiers",        action="store_true")
     general_parser.add_argument("-l", "--local",       help="Work with pre-downloaded fastq files. Only for --sra", action="store_true")
+    general_parser.add_argument("-r", "--rerun",       help="Rerun expreriment. Only for --sra",             action="store_true")
     return general_parser
 
 
@@ -82,14 +83,17 @@ def get_metadata_sra(metadata_file):
     return raw_data.sort_index()
 
 
-def extract_sra(srr_files, run_id, fdump, local):
+def extract_sra(srr_files, run_id, fdump, local, rerun):
     first_filename = run_id + "_R1.fastq.gz"
     second_filename = run_id + "_R2.fastq.gz"
     first_combined_filepath = os.path.join(CWD, first_filename)
     second_combined_filepath = os.path.join(CWD, second_filename)
 
-    if os.path.isfile(first_combined_filepath) or os.path.isfile(second_combined_filepath):
+    if not rerun and (os.path.isfile(first_combined_filepath) or os.path.isfile(second_combined_filepath)):
         raise Exception(f"""File {first_combined_filepath} or {second_combined_filepath} already exists""")
+
+    if rerun and os.path.isfile(first_combined_filepath) and os.path.isfile(second_combined_filepath):
+        return first_combined_filepath, second_combined_filepath
 
     for srr_id in srr_files:
         if fdump:
@@ -134,7 +138,7 @@ def submit_jobs_sra (args, metadata):
         try:
             print("\n  SRR: ", srr_files)
             run_id = exp_idx
-            first_combined, second_combined = extract_sra(srr_files, run_id, args.fdump, args.local)
+            first_combined, second_combined = extract_sra(srr_files, run_id, args.fdump, args.local, args.rerun)
             job_template = {
                 "job": {
                     "fastq_file_1": {
