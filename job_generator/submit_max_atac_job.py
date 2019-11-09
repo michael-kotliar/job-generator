@@ -89,11 +89,14 @@ def extract_sra(srr_files, run_id, fdump, local, rerun):
     first_combined_filepath = os.path.join(CWD, first_filename)
     second_combined_filepath = os.path.join(CWD, second_filename)
 
-    if not rerun and (os.path.isfile(first_combined_filepath) or os.path.isfile(second_combined_filepath)):
-        raise Exception(f"""File {first_combined_filepath} or {second_combined_filepath} already exists""")
-
-    if rerun and os.path.isfile(first_combined_filepath) and os.path.isfile(second_combined_filepath):
-        return first_combined_filepath, second_combined_filepath
+    if rerun:
+        if os.path.isfile(first_combined_filepath) and os.path.isfile(second_combined_filepath):
+            return first_combined_filepath, second_combined_filepath
+        else:
+            raise Exception(f"""File {first_combined_filepath} or {second_combined_filepath} is missing. Cannot rerun""")
+    else:
+        if os.path.isfile(first_combined_filepath) or os.path.isfile(second_combined_filepath):
+            raise Exception(f"""File {first_combined_filepath} or {second_combined_filepath} already exists""")
 
     for srr_id in srr_files:
         if fdump:
