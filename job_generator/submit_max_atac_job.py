@@ -237,7 +237,7 @@ def main(argsl=None):
     if argsl is None:
         argsl = sys.argv[1:]
     args,_ = arg_parser().parse_known_args(argsl)
-    args = normalize_args(args, ["dag", "number", "sra", "local"])
+    args = normalize_args(args, ["dag", "number", "sra", "local", "rerun"])
     if args.sra:
         metadata = get_metadata_sra(args.metadata)
         submit_jobs_sra(args, metadata)
