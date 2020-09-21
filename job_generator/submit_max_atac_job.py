@@ -22,7 +22,6 @@ def arg_parser():
     general_parser.add_argument("-d", "--dag",         help="Dag id",                                        required=True)
     general_parser.add_argument("-i", "--indices",     help="Path to indices folder",                        required=True)
     general_parser.add_argument("-b", "--blacklisted", help="Path to blacklisted regions file",              required=True)
-    general_parser.add_argument("-c", "--chromlength", help="Path to chromosome length file",                required=True)
     general_parser.add_argument("-g", "--genome",      help="Path to genome FASTA file",                     required=True)
     general_parser.add_argument("-n", "--number",      help="Limit number of experiments to submit",         type=int)
     general_parser.add_argument("-o", "--output",      help="Path to be used as output_folder in job files", required=True)
@@ -160,15 +159,11 @@ def submit_jobs_sra (args, metadata):
                         "class": "File",
                         "location": args.blacklisted
                     },
-                    "chrom_length_file": {
-                        "class": "File",
-                        "location": args.chromlength
-                    },
-                    "genome_size": "2.7e9",
                     "genome_fasta_file": {
                         "class": "File",
                         "location": args.genome
                     },
+                    "genome_size": "2.7e9",
                     "output_folder": os.path.join(args.output, run_id),
                     "threads": 4
                 }
@@ -214,15 +209,11 @@ def submit_jobs (args, metadata):
                         "class": "File",
                         "location": args.blacklisted
                     },
-                    "chrom_length_file": {
-                        "class": "File",
-                        "location": args.chromlength
-                    },
-                    "genome_size": "2.7e9",
                     "genome_fasta_file": {
                         "class": "File",
                         "location": args.genome
                     },
+                    "genome_size": "2.7e9",
                     "output_folder": os.path.join(args.output, run_id),
                     "threads": 4
                 }
