@@ -28,7 +28,7 @@ def arg_parser():
     general_parser.add_argument("-f", "--fdump",       help="Path to fastq-dump (use it with --sra). Run from Docker if not set")
     general_parser.add_argument("-s", "--sra",         help="Use metadata file with SRA identifiers",        action="store_true")
     general_parser.add_argument("-l", "--local",       help="Work with pre-downloaded fastq files. Only for --sra", action="store_true")
-    general_parser.add_argument("-r", "--rerun",       help="Rerun expreriment. Only for --sra",             action="store_true")
+    general_parser.add_argument("-r", "--rerun",       help="Rerun expreriment",                             action="store_true")
     return general_parser
 
 
@@ -37,10 +37,16 @@ def get_metadata(metadata_file):
     return raw_data.loc[raw_data[FILTER_COLUMN] == FILTER_VALUE].sort_index()
 
 
-def download_files(files_df, prefix):
+def download_files(files_df, prefix, rerun):
     combined_filepath = os.path.join(CWD, prefix + ".fastq.gz")
-    if os.path.isfile(combined_filepath):
-        raise Exception(f"""File {combined_filepath} already exists""")
+    if rerun:
+        if os.path.isfile(combined_filepath):
+            return combined_filepath
+        else:
+            raise Exception(f"""File {combined_filepath} is missing. Cannot rerun""")
+    else:
+        if os.path.isfile(combined_filepath):
+            raise Exception(f"""File {combined_filepath} already exists""")
     for file_url in files_df["File download URL"]:
         current_filename = file_url.split("/")[-1]
         current_filepath = os.path.join(CWD, current_filename)
@@ -189,8 +195,8 @@ def submit_jobs (args, metadata):
             print("\n  First:\n", first_files[["File accession", "Paired with"]])
             print("\n  Second:\n", second_files[["File accession", "Paired with"]])
             run_id = "_".join([str(i) for i in exp_idx])
-            first_combined = download_files(first_files, run_id+"_R1")
-            second_combined = download_files(second_files, run_id+"_R2")
+            first_combined = download_files(first_files, run_id+"_R1", args.rerun)
+            second_combined = download_files(second_files, run_id+"_R2", args.rerun)
             job_template = {
                 "job": {
                     "fastq_file_1": {
