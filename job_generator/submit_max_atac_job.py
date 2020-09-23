@@ -170,7 +170,7 @@ def submit_jobs_sra (args, metadata):
                         "location": args.genome
                     },
                     "genome_size": "2.7e9",
-                    "output_folder": os.path.join(args.output, run_id),
+                    "outputs_folder": os.path.join(args.output, run_id),
                     "threads": 4
                 }
             }
@@ -220,7 +220,7 @@ def submit_jobs (args, metadata):
                         "location": args.genome
                     },
                     "genome_size": "2.7e9",
-                    "output_folder": os.path.join(args.output, run_id),
+                    "outputs_folder": os.path.join(args.output, run_id),
                     "threads": 4
                 }
             }
