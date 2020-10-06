@@ -7,7 +7,7 @@ from json import dumps
 from job_generator.utils.utils import normalize_args
 
 
-INDEX_COLUMNS = ["Experiment accession", "Biological replicate(s)", "Paired end", "Technical replicate"]
+INDEX_COLUMNS = ["Experiment accession", "Biological replicate(s)", "Paired end", "Technical replicate(s)"]
 EXP_COLUMNS = ["Experiment accession", "Biological replicate(s)"]
 FILTER_COLUMN = "Run type"
 FILTER_VALUE = "paired-ended"
@@ -71,16 +71,17 @@ def trigger_dag(job, run_id, dag_id):
     subprocess.run(params, env=env)
 
 
-def properly_paired(first_files, second_files):
-    def equal(f,s):
-        return (f["Paired with"].equals(s["File accession"])) and (s["Paired with"].equals(f["File accession"])) and (f.index.equals(s.index))
+def equal(f,s):
+    return (f["Paired with"].equals(s["File accession"])) and (s["Paired with"].equals(f["File accession"])) and (f.index.equals(s.index))
+
+
+def get_properly_paired_second_files(first_files, second_files):
     if equal(first_files, second_files):
-        return True
+        return second_files
     else:
-        print("  Fix pairing order")
+        print("  Fixed pairing order")
         row_count = len(second_files.index)
-        second_files = second_files.iloc[pd.Index(second_files["File accession"]).get_indexer(first_files["Paired with"])]
-        return (equal(first_files, second_files) and len(second_files.index) == row_count)
+        return second_files.iloc[pd.Index(second_files["File accession"]).get_indexer(first_files["Paired with"])]
 
 
 def get_metadata_sra(metadata_file):
@@ -190,8 +191,7 @@ def submit_jobs (args, metadata):
         second_files = exp_data.loc[exp_idx+(2,)]
         count = count + 1
         try:
-            if not properly_paired(first_files, second_files):
-                raise Exception("Failed to fix pairing order")
+            second_files = get_properly_paired_second_files(first_files, second_files)
             print("\n  First:\n", first_files[["File accession", "Paired with"]])
             print("\n  Second:\n", second_files[["File accession", "Paired with"]])
             run_id = "_".join([str(i) for i in exp_idx])
