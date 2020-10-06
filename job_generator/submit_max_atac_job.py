@@ -24,6 +24,7 @@ def arg_parser():
     general_parser.add_argument("-b", "--blacklisted", help="Path to blacklisted regions file",              required=True)
     general_parser.add_argument("-g", "--genome",      help="Path to genome FASTA file",                     required=True)
     general_parser.add_argument("-n", "--number",      help="Limit number of experiments to submit",         type=int)
+    general_parser.add_argument("-t", "--threads",     help="Threads number",                                type=int, default=4)
     general_parser.add_argument("-o", "--output",      help="Path to be used as output_folder in job files", required=True)
     general_parser.add_argument("-f", "--fdump",       help="Path to fastq-dump (use it with --sra). Run from Docker if not set")
     general_parser.add_argument("-s", "--sra",         help="Use metadata file with SRA identifiers",        action="store_true")
@@ -172,7 +173,7 @@ def submit_jobs_sra (args, metadata):
                     },
                     "genome_size": "2.7e9",
                     "outputs_folder": os.path.join(args.output, run_id),
-                    "threads": 4
+                    "threads": args.threads
                 }
             }
             print(dumps(job_template, indent = 4))
@@ -221,7 +222,7 @@ def submit_jobs (args, metadata):
                     },
                     "genome_size": "2.7e9",
                     "outputs_folder": os.path.join(args.output, run_id),
-                    "threads": 4
+                    "threads": args.threads
                 }
             }
             print(dumps(job_template, indent = 4))
@@ -234,7 +235,7 @@ def main(argsl=None):
     if argsl is None:
         argsl = sys.argv[1:]
     args,_ = arg_parser().parse_known_args(argsl)
-    args = normalize_args(args, ["dag", "number", "sra", "local", "rerun"])
+    args = normalize_args(args, ["dag", "number", "sra", "local", "rerun", "threads"])
     if args.sra:
         metadata = get_metadata_sra(args.metadata)
         submit_jobs_sra(args, metadata)
