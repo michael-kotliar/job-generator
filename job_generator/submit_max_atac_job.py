@@ -1,6 +1,7 @@
 import sys
 import os
 import argparse
+import gzip
 import pandas as pd
 import subprocess
 from json import dumps
@@ -24,12 +25,15 @@ def arg_parser():
     general_parser.add_argument("-b", "--blacklisted", help="Path to blacklisted regions file",              required=True)
     general_parser.add_argument("-g", "--genome",      help="Path to genome FASTA file",                     required=True)
     general_parser.add_argument("-n", "--number",      help="Limit number of experiments to submit",         type=int)
+    general_parser.add_argument("-c", "--counts",      help="Limit read counts per submitted experiment",    type=int, default=100000000)
     general_parser.add_argument("-t", "--threads",     help="Threads number",                                type=int, default=4)
     general_parser.add_argument("-o", "--output",      help="Path to be used as output_folder in job files", required=True)
     general_parser.add_argument("-f", "--fdump",       help="Path to fastq-dump (use it with --sra). Run from Docker if not set")
     general_parser.add_argument("-s", "--sra",         help="Use metadata file with SRA identifiers",        action="store_true")
     general_parser.add_argument("-l", "--local",       help="Work with pre-downloaded fastq files. Only for --sra", action="store_true")
     general_parser.add_argument("-r", "--rerun",       help="Rerun expreriment",                             action="store_true")
+    general_parser.add_argument("-w", "--download",    help="Skip triggering. Only download data",           action="store_true")
+    general_parser.add_argument("-p", "--suffix",      help="Run id suffix",                                 type=str, default="")
     return general_parser
 
 
@@ -38,7 +42,15 @@ def get_metadata(metadata_file):
     return raw_data.loc[raw_data[FILTER_COLUMN] == FILTER_VALUE].sort_index()
 
 
-def download_files(files_df, prefix, rerun):
+def get_reads_count(filename):
+    counter = 0
+    with gzip.open(filename, "rb") as input_stream:
+        for counter, _ in enumerate(input_stream):
+            pass
+    return (counter + 1) / 4.0
+
+
+def download_files(files_df, prefix, rerun, max_counts):
     combined_filepath = os.path.join(CWD, prefix + ".fastq.gz")
     if rerun:
         if os.path.isfile(combined_filepath):
@@ -48,13 +60,18 @@ def download_files(files_df, prefix, rerun):
     else:
         if os.path.isfile(combined_filepath):
             raise Exception(f"""File {combined_filepath} already exists""")
+    current_counts = 0
+    remaining_counts = max_counts
     for file_url in files_df["File download URL"]:
+        if remaining_counts == 0:
+            print(f"\n  Skip download. Reached max reads counts ({current_counts})")
+            break
         current_filename = file_url.split("/")[-1]
         current_filepath = os.path.join(CWD, current_filename)
         if os.path.isfile(current_filepath):
-            params = " ".join(["cat", current_filepath, ">>", combined_filepath])
+            params = " ".join(["cat", current_filepath, "| zcat | head -n", str(4*remaining_counts), "| gzip  >>", combined_filepath])
         else:
-            params = " ".join(["wget", "-O", "-", "-q", "--show-progress", file_url, ">>", combined_filepath])
+            params = " ".join(["wget", "-O", "-", "-q", "--show-progress", file_url, "| zcat | head -n", str(4*remaining_counts), "| gzip  >>", combined_filepath])
         env = os.environ.copy()
         print("\n  Run", params)
         try:
@@ -62,11 +79,13 @@ def download_files(files_df, prefix, rerun):
         except Exception as err:
             os.remove(combined_filepath)
             raise err
+        current_counts = get_reads_count(combined_filepath)
+        remaining_counts = max_counts - current_counts
     return combined_filepath
 
 
-def trigger_dag(job, run_id, dag_id):
-    params = ["airflow", "trigger_dag", "-r", run_id, "-c", dumps(job), dag_id]
+def trigger_dag(job, run_id, dag_id, suffix):
+    params = ["airflow", "trigger_dag", "-r", run_id+suffix, "-c", dumps(job), dag_id]
     env = os.environ.copy()
     print("Trigger dag", params)
     subprocess.run(params, env=env)
@@ -177,7 +196,8 @@ def submit_jobs_sra (args, metadata):
                 }
             }
             print(dumps(job_template, indent = 4))
-            trigger_dag(job_template, run_id, args.dag)
+            if not args.download:
+                trigger_dag(job_template, run_id, args.dag, args.suffix)
         except Exception as err:
             print("\n  Failed to submit job:", err)
 
@@ -196,8 +216,8 @@ def submit_jobs (args, metadata):
             print("\n  First:\n", first_files[["File accession", "Paired with"]])
             print("\n  Second:\n", second_files[["File accession", "Paired with"]])
             run_id = "_".join([str(i) for i in exp_idx])
-            first_combined = download_files(first_files, run_id+"_R1", args.rerun)
-            second_combined = download_files(second_files, run_id+"_R2", args.rerun)
+            first_combined = download_files(first_files, run_id+"_R1", args.rerun, args.counts)
+            second_combined = download_files(second_files, run_id+"_R2", args.rerun, args.counts)
             job_template = {
                 "job": {
                     "fastq_file_1": {
@@ -226,7 +246,8 @@ def submit_jobs (args, metadata):
                 }
             }
             print(dumps(job_template, indent = 4))
-            trigger_dag(job_template, run_id, args.dag)
+            if not args.download:
+                trigger_dag(job_template, run_id, args.dag, args.suffix)
         except Exception as err:
             print("\n  Failed to submit job:", err)
 
@@ -235,7 +256,7 @@ def main(argsl=None):
     if argsl is None:
         argsl = sys.argv[1:]
     args,_ = arg_parser().parse_known_args(argsl)
-    args = normalize_args(args, ["dag", "number", "sra", "local", "rerun", "threads"])
+    args = normalize_args(args, ["dag", "number", "sra", "local", "rerun", "threads", "counts", "download", "suffix"])
     if args.sra:
         metadata = get_metadata_sra(args.metadata)
         submit_jobs_sra(args, metadata)
