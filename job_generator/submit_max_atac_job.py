@@ -47,7 +47,7 @@ def get_reads_count(filename):
     with gzip.open(filename, "rb") as input_stream:
         for counter, _ in enumerate(input_stream):
             pass
-    return (counter + 1) / 4.0
+    return int((counter + 1) / 4)
 
 
 def download_files(files_df, prefix, rerun, max_counts):
